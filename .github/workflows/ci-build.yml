@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ ubuntu-22.04, macos-latest, ubuntu-24.04-arm, macos-13 ]
+
+      fail-fast: false
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set OS and ARCH variables
+        run: |
+          echo "OS=${{ runner.os == 'Linux' && 'linux' || 'mac' }}" >> $GITHUB_ENV
+          echo "ARCH=${{ runner.arch == 'X64' && '64' || 'arm64' }}" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Set up dependencies for Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -qq cmake build-essential clang icu-devtools
+
+      - name: Set up dependencies for macOS
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew upgrade cmake 
+          brew install automake autoconf fontconfig
+          brew install icu4c ucon64
+
+      - name: Display versions macOs
+        if: runner.os == 'macOS'
+        run: |
+          gcc -v
+          g++ -v
+          cmake --version          
+          eval $(brew --cellar)/ucon64/*/bin/ucon64 -v
+
+      - name: Display versions Linux
+        if: runner.os == 'Linux'
+        run: |
+          gcc -v
+          g++ -v
+          cmake --version          
+          uconv -v
+
+      - name: Set env variables for macOS x64
+        if: runner.os == 'macOS' && runner.arch == 'X64'
+        run: |
+          echo "C_INCLUDE_PATH=/usr/local/include" >> $GITHUB_ENV
+          echo "CPLUS_INCLUDE_PATH=/usr/local/include" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Set env variables for macOS ARM64
+        if: runner.os == 'macOS' && runner.arch == 'ARM64'
+        run: |
+          echo "C_INCLUDE_PATH=/opt/homebrew/include" >> $GITHUB_ENV
+          echo "CPLUS_INCLUDE_PATH=/opt/homebrew/include" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Build for macOS
+        if: runner.os == 'macOS'
+        run: |
+          cmake ./
+          make
+
+      - name: Build on Linux
+        if: runner.os == 'Linux'
+        run: |
+          cmake ./
+          make
+
+      - name: ls
+        run: ls
+        shell: bash
+
+      - name: Copy pdfalto linux executable
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p output/libwapiti/${{ env.OS }}/${{ env.ARCH }}
+          cp *.so output/libwapiti/${{ env.OS }}/${{ env.ARCH }}
+          cp wapiti_runner output/libwapiti/${{ env.OS }}/${{ env.ARCH }}
+
+      - name: Copy pdfalto macos executable
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p output/libwapiti/${{ env.OS }}/${{ env.ARCH }}
+          cp *.dylib output/libwapiti/${{ env.OS }}/${{ env.ARCH }}
+          cp wapiti_runner output/libwapiti/${{ env.OS }}/${{ env.ARCH }}
+
+      - name: Save libraries
+        uses: actions/upload-artifact@v4
+        with:
+          name: libwapiti-lib-${{ env.OS }}-${{ env.ARCH }}
+          path: output
