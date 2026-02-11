@@ -1,13 +1,13 @@
 name: CI
 
 on:
-  push
+  push:
 
 jobs:
   build:
     strategy:
       matrix:
-        os: [ ubuntu-22.04, macos-latest, ubuntu-24.04-arm, macos-13 ]
+        os: [ self-hosted, macos-latest, ubuntu-24.04-arm, macos-15-intel ]
 
       fail-fast: false
 
@@ -16,8 +16,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          submodules: true
 
       - name: Set OS and ARCH variables
         run: |
@@ -29,14 +27,14 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -qq cmake build-essential clang icu-devtools
+          sudo apt-get install -qq cmake build-essential clang default-jdk libicu-dev icu-devtools
 
       - name: Set up dependencies for macOS
         if: runner.os == 'macOS'
         run: |
           brew update
           brew upgrade cmake 
-          brew install automake autoconf fontconfig
+          brew install automake autoconf
           brew install icu4c ucon64
 
       - name: Display versions macOs
@@ -72,35 +70,72 @@ jobs:
       - name: Build for macOS
         if: runner.os == 'macOS'
         run: |
-          cmake ./
-          make
+          mkdir build
+          cmake -S . -B build
+          cmake --build build
 
       - name: Build on Linux
         if: runner.os == 'Linux'
         run: |
-          cmake ./
-          make
+          mkdir -p build
+          cd build
+          cmake ..
+          cmake --build .
 
       - name: ls
         run: ls
         shell: bash
 
-      - name: Copy pdfalto linux executable
+      - name: Copy wapiti linux artifacts
         if: runner.os == 'Linux'
         run: |
           mkdir -p output/libwapiti/${{ env.OS }}/${{ env.ARCH }}
-          cp *.so output/libwapiti/${{ env.OS }}/${{ env.ARCH }}
-          cp wapiti_runner output/libwapiti/${{ env.OS }}/${{ env.ARCH }}
+          cp build/*.so output/libwapiti/${{ env.OS }}/${{ env.ARCH }}
+          cp build/wapiti_runner output/libwapiti/${{ env.OS }}/${{ env.ARCH }}
 
-      - name: Copy pdfalto macos executable
+      - name: Copy wapiti macos artifacts
         if: runner.os == 'macOS'
         run: |
           mkdir -p output/libwapiti/${{ env.OS }}/${{ env.ARCH }}
-          cp *.dylib output/libwapiti/${{ env.OS }}/${{ env.ARCH }}
-          cp wapiti_runner output/libwapiti/${{ env.OS }}/${{ env.ARCH }}
+          cp build/*.dylib output/libwapiti/${{ env.OS }}/${{ env.ARCH }}
+          cp build/wapiti_runner output/libwapiti/${{ env.OS }}/${{ env.ARCH }}
 
       - name: Save libraries
         uses: actions/upload-artifact@v4
         with:
           name: libwapiti-lib-${{ env.OS }}-${{ env.ARCH }}
+          path: output
+
+  assemble-artifact:
+    needs: [ build ]
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: output
+      - name: Move contents to output directory
+        run: |
+          for dir in output/*; do
+            if [ -d "$dir" ]; then
+              rsync -a "$dir"/* output/
+              rm -rf "$dir"
+            fi
+          done
+        shell: bash
+      - name: Display structure of downloaded files
+        run: ls -R
+      - name: Get the revision ID
+        id: extract_rev_id
+        run: |
+          SHORT_COMMIT_ID=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "short_commit_id=${SHORT_COMMIT_ID}" >> $GITHUB_OUTPUT
+      - name: Save artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: libwapiti-bin-all-${{ steps.extract_rev_id.outputs.short_commit_id }}
           path: output
