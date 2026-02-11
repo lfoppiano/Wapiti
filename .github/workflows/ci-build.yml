@@ -77,9 +77,10 @@ jobs:
       - name: Build on Linux
         if: runner.os == 'Linux'
         run: |
-          mkdir build
-          cmake -S . -B build
-          cmake --build build
+          mkdir -p build
+          cd build
+          cmake ..
+          cmake --build .
 
       - name: ls
         run: ls
