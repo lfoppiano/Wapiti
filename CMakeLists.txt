@@ -4,6 +4,8 @@ project( wapiti )
 set(CMAKE_BUILD_TYPE "Release")
 
 set(CMAKE_C_FLAGS "-std=c99")
+set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 
 set(CMAKE_SKIP_BUILD_RPATH FALSE)
 set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
@@ -32,7 +34,9 @@ message ("Swig sources list: ${SOURCES_SWIG}")
 #SET_SOURCE_FILES_PROPERTIES( ${SOURCES} PROPERTIES LANGUAGE CXX )
 
 add_library( wapiti SHARED ${SOURCES} ${SOURCES_SWIG})
+target_link_libraries( wapiti m pthread )
 
 add_executable( wapiti_runner ${SOURCES} ${SOURCES_SWIG})
+target_link_libraries( wapiti_runner m pthread )
 
 set( CMAKE_VERBOSE_MAKEFILE on )
