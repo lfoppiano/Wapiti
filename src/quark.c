@@ -95,10 +95,10 @@ qrk_t *qrk_new(void) {
  *   qrk_unmap become invalid and must not be used anymore.
  */
 void qrk_free(qrk_t *qrk) {
-	const uint32_t stkmax = 1024;
 	if (qrk->count != 0) {
-		node_t *stk[stkmax];
+		uint32_t stkmax = 1024;
 		uint32_t cnt = 0;
+		node_t **stk = xmalloc(sizeof(node_t *) * stkmax);
 		stk[cnt++] = qrk->root;
 		while (cnt != 0) {
 			node_t *nd = stk[--cnt];
@@ -106,10 +106,15 @@ void qrk_free(qrk_t *qrk) {
 				free(qrk_nd2lf(nd));
 				continue;
 			}
+			if (cnt + 2 > stkmax) {
+				stkmax *= 2;
+				stk = xrealloc(stk, sizeof(node_t *) * stkmax);
+			}
 			stk[cnt++] = nd->child[0];
 			stk[cnt++] = nd->child[1];
 			free(nd);
 		}
+		free(stk);
 	}
 	free(qrk->leafs);
 	free(qrk);

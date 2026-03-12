@@ -105,9 +105,11 @@ struct mth_s {
 bool mth_getjob(job_t *job, uint32_t *cnt, uint32_t *pos) {
 	if (job == NULL)
 		return false;
-	if (job->send == job->size)
-		return false;
 	pthread_mutex_lock(&job->lock);
+	if (job->send == job->size) {
+		pthread_mutex_unlock(&job->lock);
+		return false;
+	}
 	*cnt = min(job->batch, job->size - job->send);
 	*pos = job->send;
 	job->send += *cnt;
@@ -168,6 +170,8 @@ void mth_spawn(func_t *f, uint32_t W, void *ud[W], uint32_t size, uint32_t batch
 		if (pthread_join(th[w], NULL) != 0)
 			fatal("failed to join thread");
 	pthread_attr_destroy(&attr);
+	if (pjob != NULL)
+		pthread_mutex_destroy(&job.lock);
 }
 #endif
 

@@ -52,18 +52,14 @@ void atm_inc(double *value, double inc) {
 }
 #else
 static inline
-void atm_inc(volatile double *value, double inc) {
-	while (1) {
-		volatile union {
-			double   d;
-			uint64_t u;
-		} old, new;
-		old.d = *value;
+void atm_inc(double *value, double inc) {
+	uint64_t *ptr = (uint64_t *)value;
+	union { double d; uint64_t u; } old, new;
+	old.u = __atomic_load_n(ptr, __ATOMIC_RELAXED);
+	do {
 		new.d = old.d + inc;
-		uint64_t *ptr = (uint64_t *)value;
-		if (__sync_bool_compare_and_swap(ptr, old.u, new.u))
-			break;
-	}
+	} while (!__atomic_compare_exchange_n(ptr, &old.u, new.u,
+			1, __ATOMIC_RELAXED, __ATOMIC_RELAXED));
 }
 #endif
 
@@ -499,8 +495,9 @@ void grd_spfwdbwd(grd_st_t *grd_st, const seq_t *seq) {
 	}
 	for (uint32_t yp = 0; yp < Y; yp++)
 		(*beta)[T - 1][yp] = 1.0 / Y;
+	double *tmp = xmalloc(sizeof(double) * Y);
 	for (uint32_t t = T - 1; t > grd_st->first; t--) {
-		double sum = 0.0, tmp[Y];
+		double sum = 0.0;
 		for (uint32_t y = 0; y < Y; y++) {
 			tmp[y] = (*beta)[t][y] * (*psiuni)[t][y];
 			sum += tmp[y];
@@ -520,6 +517,7 @@ void grd_spfwdbwd(grd_st_t *grd_st, const seq_t *seq) {
 		}
 		xvm_unit((*beta)[t - 1], (*beta)[t - 1], Y);
 	}
+	free(tmp);
 	for (uint32_t t = 0; t < T; t++) {
 		double z = 0.0;
 		for (uint32_t y = 0; y < Y; y++)
@@ -622,14 +620,14 @@ void grd_spupgrad(grd_st_t *grd_st, const seq_t *seq) {
 			}
 		}
 	}
+	double *e = xmalloc(sizeof(double) * Y * Y);
 	for (uint32_t t = 1; t < T; t++) {
 		const pos_t *pos = &(seq->pos[t]);
 		// We build the expectation matrix
-		double e[Y][Y];
 		for (uint32_t yp = 0; yp < Y; yp++)
 			for (uint32_t y = 0; y < Y; y++)
-				e[yp][y] = (*alpha)[t - 1][yp] * (*beta)[t][y]
-				         * (*psiuni)[t][y] * bnorm[t];
+				e[yp * Y + y] = (*alpha)[t - 1][yp] * (*beta)[t][y]
+				              * (*psiuni)[t][y] * bnorm[t];
 		const uint32_t off = psioff[t];
 		for (uint32_t n = 0, y = 0; n < (*psiidx)[t][Y - 1]; ) {
 			while (n >= (*psiidx)[t][y])
@@ -637,7 +635,7 @@ void grd_spupgrad(grd_st_t *grd_st, const seq_t *seq) {
 			while (n < (*psiidx)[t][y]) {
 				const uint32_t yp = psiyp [off + n];
 				const double   v  = psival[off + n];
-				e[yp][y] += e[yp][y] * v;
+				e[yp * Y + y] += e[yp * Y + y] * v;
 				n++;
 			}
 		}
@@ -646,11 +644,12 @@ void grd_spupgrad(grd_st_t *grd_st, const seq_t *seq) {
 			for (uint32_t y = 0; y < Y; y++, d++) {
 				for (uint32_t n = 0; n < pos->bcnt; n++) {
 					const uint64_t o = pos->bobs[n];
-					atm_inc(g + mdl->boff[o] + d, e[yp][y]);
+					atm_inc(g + mdl->boff[o] + d, e[yp * Y + y]);
 				}
 			}
 		}
 	}
+	free(e);
 }
 
 /* grd_subemp:

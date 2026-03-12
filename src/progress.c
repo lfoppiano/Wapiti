@@ -68,8 +68,10 @@
  *   This value is set to true when the user request the trainer to stop. In
  *   this case, the trainer have to stop as soon as possible in a clean state,
  *   discarding the lasts computations if it cannot integrate them quickly.
+ *   Declared volatile sig_atomic_t for safe access from signal handlers and
+ *   visibility across threads.
  */
-bool uit_stop = false;
+volatile sig_atomic_t uit_stop = 0;
 
 /* uit_signal:
  *   Signal handler to catch interupt signal. When a signal is received, the
@@ -80,7 +82,7 @@ bool uit_stop = false;
  */
 static void uit_signal(int sig) {
 	signal(sig, SIG_DFL);
-	uit_stop = true;
+	uit_stop = 1;
 }
 
 /* uit_setup:
@@ -88,7 +90,7 @@ static void uit_signal(int sig) {
  *   and start the timer.
  */
 void uit_setup(mdl_t *mdl) {
-	uit_stop = false;
+	uit_stop = 0;
 	if (signal(SIGINT, uit_signal) == SIG_ERR)
 		warning("failed to set signal handler, no clean early stop");
 	gettimeofday(&mdl->timer, NULL);

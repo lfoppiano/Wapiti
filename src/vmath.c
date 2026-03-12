@@ -144,6 +144,11 @@ double xvm_unit(double r[], const double x[], uint64_t N) {
 	double sum = 0.0;
 	for (uint64_t n = 0; n < N; n++)
 		sum += x[n];
+	if (sum == 0.0) {
+		for (uint64_t n = 0; n < N; n++)
+			r[n] = 0.0;
+		return 0.0;
+	}
 	const double scale = 1.0 / sum;
 	xvm_scale(r, x, scale, N);
 	return scale;

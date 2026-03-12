@@ -28,13 +28,14 @@
 #ifndef progress_h
 #define progress_h
 
+#include <signal.h>
 #include <stdbool.h>
 #include <stdint.h>
 
 #include "wapiti.h"
 #include "model.h"
 
-extern bool uit_stop;
+extern volatile sig_atomic_t uit_stop;
 
 void uit_setup(mdl_t *mdl);
 void uit_cleanup(mdl_t *mdl);

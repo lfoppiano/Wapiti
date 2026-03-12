@@ -28,8 +28,8 @@
 #ifndef thread_h
 #define thread_h
 
+#include <stdbool.h>
 #include <stdint.h>
-#include <pthread.h>
 
 #include "model.h"
 
